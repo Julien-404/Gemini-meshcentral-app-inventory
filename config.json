@@ -1,16 +1,17 @@
 {
-    "settings": {
-        "enabled": true
-    },
-    "domains": {
-        "": {
-            "_title": "Software Inventory",
-            "title": "Inventaire Logiciel",
-            "newGroupTab": {
-                "_title": "Inventory",
-                "title": "Inventaire",
-                "url": "/plugins/softwareinventory/views/inventory.html"
-            }
-        }
-    }
+  "name": "Windows App Inventory",
+  "shortName": "inventory",
+  "version": "1.0.0",
+  "author": "Julien-404",
+  "description": "Collecte l'inventaire des applications des machines Windows d'un groupe et le sauvegarde sur le serveur.",
+  "hasAdminPanel": true,
+  "homepage": "https://github.com/Julien-404/Gemini-meshcentral-app-inventory",
+  "changelogUrl": "https://raw.githubusercontent.com/Julien-404/Gemini-meshcentral-app-inventory/main/CHANGELOG.md",
+  "configUrl": "https://raw.githubusercontent.com/Julien-404/Gemini-meshcentral-app-inventory/main/config.json",
+  "downloadUrl": "https://github.com/Julien-404/Gemini-meshcentral-app-inventory/archive/main.zip",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Julien-404/Gemini-meshcentral-app-inventory.git"
+  },
+  "meshCentralCompat": ">=0.4.5"
 }

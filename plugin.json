@@ -1,9 +1,0 @@
-{
-    "name": "Software Inventory",
-    "version": "1.0.0",
-    "author": "Gemini",
-    "description": "Ajoute un onglet pour effectuer un inventaire des logiciels sur les groupes d'appareils Windows.",
-    "core_version": ">=1.1.0",
-    "server_main": "softwareinventory.js",
-    "config_file": "config.json"
-}
