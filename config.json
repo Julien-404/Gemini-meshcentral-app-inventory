@@ -1,14 +1,16 @@
 {
-    "name": "Application Inventory",
-    "shortName": "app-inventory",
-    "version": "1.5.2",
-    "description": "Ajoute un onglet 'Inventaire' pour lister les applications d'un groupe.",
-    "author": "Julien-404",
-    "meshCentralCompat": ">=0.4.4-s",
-    "hooks": {
-        "devicegroup": "tab.html"
+    "settings": {
+        "enabled": true
     },
-    "serverhooks": {
-        "app-inventory": "server.js"
+    "domains": {
+        "": {
+            "_title": "Software Inventory",
+            "title": "Inventaire Logiciel",
+            "newGroupTab": {
+                "_title": "Inventory",
+                "title": "Inventaire",
+                "url": "/plugins/softwareinventory/views/inventory.html"
+            }
+        }
     }
 }
