@@ -3,7 +3,7 @@
  * @author Votre Nom
  * @copyright 2025
  * @license Apache-2.0
- * @version 1.0.5
+ * @version 1.0.6
  */
 
 "use strict";
@@ -16,47 +16,97 @@ module.exports.inventory = function (parent) {
         'runInventoryForSelectedGroup'
     ];
     
-    // Cette fonction est appelée une seule fois au démarrage du serveur.
-    // Nous savons qu'elle fonctionne grâce à vos logs précédents.
+    // --- HOOK CÔTÉ SERVEUR ---
+    // Cette partie s'exécute sur le serveur au démarrage. Nous savons qu'elle fonctionne.
     obj.server_startup = function() {
-        console.log("Plugin Inventory: Démarrage du plugin d'inventaire applicatif v1.0.5.");
-
-        // --- TECHNIQUE DE DÉBOGAGE RADICALE ---
-        // Nous allons "monkey-patcher" (modifier à la volée) une fonction de base de l'interface MeshCentral.
-        // La fonction 'common.FormatBytes' est utilisée partout pour afficher des tailles de fichiers.
-        // Si notre code est bien exécuté par le navigateur, cette modification sera active.
-        try {
-            var originalFormatBytes = common.FormatBytes;
-            common.FormatBytes = function(bytes, decimals) {
-                // On ajoute notre propre message de log.
-                console.log("Plugin Inventory: Preuve que le JS est exécuté !");
-                // On appelle ensuite la fonction originale pour ne pas casser l'interface.
-                return originalFormatBytes(bytes, decimals);
-            };
-        } catch (e) {
-            // Si 'common' n'existe pas encore, ce n'est pas grave.
-            // Le but principal est de voir si ce bloc de code s'exécute.
-        }
+        console.log("Plugin Inventory: Démarrage du plugin d'inventaire applicatif v1.0.6 (Serveur).");
     };
 
-    // Le reste du code est pour l'instant mis en commentaire pour ne pas interférer
-    // avec notre test. Nous le réactiverons une fois le problème de chargement résolu.
-    /*
+    // --- HOOKS CÔTÉ CLIENT (NAVIGATEUR) ---
+    // Ces fonctions sont envoyées au navigateur et exécutées là-bas.
+
+    // TEST : Ce hook s'exécute une fois que la page web est complètement chargée.
+    // C'est notre nouvelle "preuve de vie" pour le script côté client.
+    obj.onWebUIStartupEnd = function() {
+        console.log("Plugin Inventory: Le script client est bien exécuté ! (onWebUIStartupEnd)");
+    };
+
+    // C'est le bon hook pour ajouter un onglet à la page d'un périphérique.
     obj.registerPluginTab = function (args) {
+        // Nous ajoutons un log ici pour voir s'il est appelé.
+        console.log("Plugin Inventory: Hook 'registerPluginTab' appelé.");
         if (args.device == null) return;
-        return { tabId: 'inventory', tabTitle: 'Inventaire' };
+        
+        console.log("Plugin Inventory: Condition 'args.device != null' remplie. Ajout de l'onglet.");
+        return {
+            tabId: 'inventory',
+            tabTitle: 'Inventaire'
+        };
     };
 
+    // Cette fonction est appelée lorsque l'utilisateur clique sur notre onglet.
     obj.onPluginTab = function(tabId, mesh) {
-        // ... (code de l'onglet) ...
+        if (tabId !== 'inventory') return;
+
+        var content = document.getElementById('tab_inventory');
+        if (!content) return;
+        
+        content.innerHTML = '<div class="p-3">Chargement des groupes...</div>';
+
+        obj.meshServer.send({
+            action: 'meshes',
+            responseid: 'plugin_inventory_meshes'
+        });
+
+        obj.meshServer.once('meshes_plugin_inventory_meshes', function(meshes) {
+            var groupOptions = '';
+            for (var i in meshes) {
+                if (meshes[i].type == 2) {
+                    groupOptions += `<option value="${meshes[i]._id}">${meshes[i].name}</option>`;
+                }
+            }
+
+            content.innerHTML = `
+                <div class="p-3">
+                    <h5>Lancer un inventaire sur un groupe</h5>
+                    <p>Sélectionnez un groupe d'appareils dans la liste ci-dessous, puis cliquez sur le bouton pour lancer le scan.</p>
+                    <div class="form-group">
+                        <label for="inventoryGroupSelect">Groupe d'appareils :</label>
+                        <select class="form-control" id="inventoryGroupSelect">${groupOptions}</select>
+                    </div>
+                    <button class="btn btn-primary mt-3" onclick="plugin.inventory.runInventoryForSelectedGroup()">Lancer l'inventaire</button>
+                    <hr/>
+                    <div id="inventory_results"></div>
+                </div>
+            `;
+        });
     };
 
+    // Fonction appelée par le bouton "Lancer l'inventaire"
     obj.runInventoryForSelectedGroup = function() {
-        // ... (code de l'action) ...
-    };
-    */
+        var select = document.getElementById('inventoryGroupSelect');
+        if (!select) return;
+        var meshid = select.value;
+        
+        var statusDiv = document.getElementById('inventory_results');
+        if (statusDiv) statusDiv.innerHTML = "Demande d'inventaire envoyée...";
+        
+        obj.meshServer.send({ action: 'nodes', meshid: meshid, responseid: 'plugin_inventory_nodes' });
 
-    // Le code backend reste inchangé car il fonctionne.
+        obj.meshServer.once('nodes_plugin_inventory_nodes', function(nodes) {
+            var onlineWindowsNodes = 0;
+            for (var i in nodes) {
+                var node = nodes[i];
+                if (node.osdesc && node.osdesc.includes('Windows') && (node.conn & 1)) {
+                    obj.meshServer.send({ action: 'msg', type: 'plugin', plugin: 'inventory', pluginaction: 'getInventory', nodeid: node._id });
+                    onlineWindowsNodes++;
+                }
+            }
+            if (statusDiv) statusDiv.innerHTML = `Inventaire en cours sur ${onlineWindowsNodes} machine(s) Windows.`;
+        });
+    };
+
+    // --- CODE BACKEND (reste inchangé) ---
     obj.hook_processAgentData = function(nodeid, data) {
         if (data == null || typeof data != 'object' || data.plugin !== 'inventory') return;
         if (data.action === 'inventoryResults') { saveInventory(nodeid, data.results); }
