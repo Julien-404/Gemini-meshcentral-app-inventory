@@ -1,9 +1,9 @@
 /**
  * @description Plugin d'inventaire d'applications pour MeshCentral
- * @author Votre Nom
+ * @author Julien-404 & Gemini
  * @copyright 2025
  * @license Apache-2.0
- * @version 1.0.6
+ * @version 2.0.0
  */
 
 "use strict";
@@ -16,60 +16,99 @@ module.exports.inventory = function (parent) {
         'runInventoryForSelectedGroup'
     ];
     
-    // --- HOOK CÔTÉ SERVEUR ---
-    // Cette partie s'exécute sur le serveur au démarrage. Nous savons qu'elle fonctionne.
+    // --- PARTIE SERVEUR ---
+    // Cette partie s'exécute uniquement sur le serveur Node.js.
+
     obj.server_startup = function() {
-        console.log("Plugin Inventory: Démarrage du plugin d'inventaire applicatif v1.0.6 (Serveur).");
+        console.log("Plugin Inventory: Démarrage du plugin v2.0.0 (Serveur).");
     };
 
-    // --- HOOKS CÔTÉ CLIENT (NAVIGATEUR) ---
-    // Ces fonctions sont envoyées au navigateur et exécutées là-bas.
-
-    // TEST : Ce hook s'exécute une fois que la page web est complètement chargée.
-    // C'est notre nouvelle "preuve de vie" pour le script côté client.
-    obj.onWebUIStartupEnd = function() {
-        console.log("Plugin Inventory: Le script client est bien exécuté ! (onWebUIStartupEnd)");
+    obj.hook_processAgentData = function(nodeid, data) {
+        // On s'assure que le message vient bien de notre plugin sur l'agent.
+        if (data == null || typeof data !== 'object' || data.plugin !== 'inventory' || data.action !== 'inventoryResults') {
+            return;
+        }
+        saveInventory(nodeid, data.results);
     };
+    
+    function saveInventory(nodeid, results) {
+        const fs = require('fs');
+        const path = require('path');
+        const node = obj.meshServer.nodes[nodeid];
+        if (!node) return;
 
-    // C'est le bon hook pour ajouter un onglet à la page d'un périphérique.
-    obj.registerPluginTab = function (args) {
-        // Nous ajoutons un log ici pour voir s'il est appelé.
-        console.log("Plugin Inventory: Hook 'registerPluginTab' appelé.");
-        if (args.device == null) return;
+        const meshid = node.meshid;
+        const pluginDir = path.join(obj.meshServer.datapath, 'plugin-inventory');
+        if (!fs.existsSync(pluginDir)) { fs.mkdirSync(pluginDir); }
+
+        // Nettoyage du nom de fichier pour une compatibilité maximale.
+        const cleanMeshId = meshid.replace(/[^a-zA-Z0-9]/g, '_');
+        const filePath = path.join(pluginDir, `${cleanMeshId}.json`);
         
-        console.log("Plugin Inventory: Condition 'args.device != null' remplie. Ajout de l'onglet.");
-        return {
-            tabId: 'inventory',
-            tabTitle: 'Inventaire'
+        let inventoryData = {};
+        if (fs.existsSync(filePath)) {
+            try {
+                inventoryData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            } catch (e) {
+                console.error(`Plugin Inventory: Erreur de lecture du fichier JSON existant ${filePath}`, e);
+            }
+        }
+        
+        inventoryData[node.name] = {
+            nodeid: node._id,
+            timestamp: new Date().toISOString(),
+            apps: results
         };
+        
+        try {
+            fs.writeFileSync(filePath, JSON.stringify(inventoryData, null, 2));
+            console.log(`Plugin Inventory: Inventaire pour ${node.name} (${node._id}) sauvegardé.`);
+        } catch (e) {
+            console.error(`Plugin Inventory: Erreur d'écriture dans le fichier ${filePath}`, e);
+        }
+    }
+
+    // --- PARTIE CLIENT ---
+    // Les fonctions ci-dessous sont envoyées et exécutées dans le navigateur de l'utilisateur.
+
+    // Hook qui s'exécute quand l'interface web est prête.
+    obj.onWebUIStartupEnd = function() {
+        console.log("Plugin Inventory: Le script client v2.0.0 est bien exécuté.");
     };
 
-    // Cette fonction est appelée lorsque l'utilisateur clique sur notre onglet.
+    // Hook pour ajouter un onglet à la page d'un périphérique.
+    obj.registerPluginTab = function (args) {
+        if (args.device == null) return;
+        return { tabId: 'inventory', tabTitle: 'Inventaire' };
+    };
+
+    // Fonction appelée quand l'utilisateur clique sur notre onglet.
     obj.onPluginTab = function(tabId, mesh) {
         if (tabId !== 'inventory') return;
 
-        var content = document.getElementById('tab_inventory');
+        const content = document.getElementById('tab_inventory');
         if (!content) return;
         
         content.innerHTML = '<div class="p-3">Chargement des groupes...</div>';
 
-        obj.meshServer.send({
-            action: 'meshes',
-            responseid: 'plugin_inventory_meshes'
-        });
+        // On demande la liste des groupes au serveur.
+        obj.meshServer.send({ action: 'meshes', responseid: 'plugin_inventory_meshes' });
 
         obj.meshServer.once('meshes_plugin_inventory_meshes', function(meshes) {
-            var groupOptions = '';
-            for (var i in meshes) {
-                if (meshes[i].type == 2) {
-                    groupOptions += `<option value="${meshes[i]._id}">${meshes[i].name}</option>`;
-                }
+            let groupOptions = '';
+            meshes.filter(m => m.type === 2) // On ne garde que les groupes d'appareils
+                  .forEach(m => groupOptions += `<option value="${m._id}">${m.name}</option>`);
+
+            if (groupOptions === '') {
+                content.innerHTML = '<div class="p-3">Aucun groupe d\'appareils trouvé.</div>';
+                return;
             }
 
+            // On affiche l'interface de contrôle.
             content.innerHTML = `
                 <div class="p-3">
                     <h5>Lancer un inventaire sur un groupe</h5>
-                    <p>Sélectionnez un groupe d'appareils dans la liste ci-dessous, puis cliquez sur le bouton pour lancer le scan.</p>
+                    <p>Sélectionnez un groupe, puis cliquez sur le bouton pour lancer le scan sur tous ses agents Windows en ligne.</p>
                     <div class="form-group">
                         <label for="inventoryGroupSelect">Groupe d'appareils :</label>
                         <select class="form-control" id="inventoryGroupSelect">${groupOptions}</select>
@@ -82,58 +121,29 @@ module.exports.inventory = function (parent) {
         });
     };
 
-    // Fonction appelée par le bouton "Lancer l'inventaire"
+    // Fonction appelée par le bouton "Lancer l'inventaire".
     obj.runInventoryForSelectedGroup = function() {
-        var select = document.getElementById('inventoryGroupSelect');
-        if (!select) return;
-        var meshid = select.value;
-        
-        var statusDiv = document.getElementById('inventory_results');
-        if (statusDiv) statusDiv.innerHTML = "Demande d'inventaire envoyée...";
+        const select = document.getElementById('inventoryGroupSelect');
+        const statusDiv = document.getElementById('inventory_results');
+        if (!select || !statusDiv) return;
+
+        const meshid = select.value;
+        statusDiv.innerHTML = "Récupération de la liste des agents...";
         
         obj.meshServer.send({ action: 'nodes', meshid: meshid, responseid: 'plugin_inventory_nodes' });
 
         obj.meshServer.once('nodes_plugin_inventory_nodes', function(nodes) {
-            var onlineWindowsNodes = 0;
-            for (var i in nodes) {
-                var node = nodes[i];
+            let onlineWindowsNodes = 0;
+            for (const i in nodes) {
+                const node = nodes[i];
+                // On cible les agents Windows connectés.
                 if (node.osdesc && node.osdesc.includes('Windows') && (node.conn & 1)) {
                     obj.meshServer.send({ action: 'msg', type: 'plugin', plugin: 'inventory', pluginaction: 'getInventory', nodeid: node._id });
                     onlineWindowsNodes++;
                 }
             }
-            if (statusDiv) statusDiv.innerHTML = `Inventaire en cours sur ${onlineWindowsNodes} machine(s) Windows.`;
+            statusDiv.innerHTML = `Demande d'inventaire envoyée à ${onlineWindowsNodes} machine(s) Windows. Les résultats seront stockés sur le serveur.`;
         });
-    };
-
-    // --- CODE BACKEND (reste inchangé) ---
-    obj.hook_processAgentData = function(nodeid, data) {
-        if (data == null || typeof data != 'object' || data.plugin !== 'inventory') return;
-        if (data.action === 'inventoryResults') { saveInventory(nodeid, data.results); }
-        return;
-    };
-    
-    function saveInventory(nodeid, results) {
-        const fs = require('fs');
-        const path = require('path');
-        var node = obj.meshServer.nodes[nodeid];
-        if (!node) return;
-        const meshid = node.meshid;
-        const pluginDir = path.join(obj.meshServer.datapath, 'plugin-inventory');
-        if (!fs.existsSync(pluginDir)) { fs.mkdirSync(pluginDir); }
-        const cleanMeshId = meshid.replace(/[^a-zA-Z0-9]/g, '_');
-        const filePath = path.join(pluginDir, `${cleanMeshId}.json`);
-        var inventoryData = {};
-        if (fs.existsSync(filePath)) {
-            try { inventoryData = JSON.parse(fs.readFileSync(filePath)); } catch (e) { console.error(e); }
-        }
-        inventoryData[node.name] = {
-            nodeid: node._id,
-            timestamp: new Date().toISOString(),
-            apps: results
-        };
-        fs.writeFileSync(filePath, JSON.stringify(inventoryData, null, 2));
-        console.log(`Plugin Inventory: Inventaire pour ${node.name} (${node._id}) sauvegardé.`);
     };
     
     return obj;
