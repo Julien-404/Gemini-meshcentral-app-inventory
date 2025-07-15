@@ -1,9 +1,10 @@
 {
     "name": "Application Inventory",
     "shortName": "app-inventory",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "description": "Ajoute un onglet 'Inventaire' pour lister les applications d'un groupe.",
     "author": "Julien-404",
+    "meshCentralCompat": ">=0.4.4-s",
     "hooks": {
         "devicegroup": "tab.html"
     },
