@@ -1,0 +1,16 @@
+{
+    "name": "Application Inventory",
+    "shortName": "app-inventory",
+    "version": "1.5.0",
+    "description": "Ajoute un onglet 'Inventaire' pour lister les applications d'un groupe.",
+    "author": "Julien-404",
+    "homepage": "https://github.com/Julien-404/Gemini-meshcentral-app-inventory",
+    "configUrl": "https://raw.githubusercontent.com/Julien-404/Gemini-meshcentral-app-inventory/main/config.json",
+    "downloadUrl": "https://github.com/Julien-404/Gemini-meshcentral-app-inventory/archive/refs/heads/main.zip",
+    "hooks": {
+        "devicegroup": "tab.html"
+    },
+    "serverhooks": {
+        "app-inventory": "server.js"
+    }
+}
