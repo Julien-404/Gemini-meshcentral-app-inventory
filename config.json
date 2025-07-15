@@ -1,7 +1,7 @@
 {
   "name": "Windows App Inventory",
   "shortName": "inventory",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "author": "Julien-404",
   "description": "Collecte l'inventaire des applications des machines Windows d'un groupe et le sauvegarde sur le serveur.",
   "hasAdminPanel": true,
