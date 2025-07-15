@@ -3,7 +3,7 @@
  * @author Julien-404 & Gemini
  * @copyright 2025
  * @license Apache-2.0
- * @version 2.0.1
+ * @version 2.0.2
  */
 
 "use strict";
@@ -19,13 +19,11 @@ module.exports.inventory = function (parent) {
     // --- PARTIE SERVEUR ---
 
     obj.server_startup = function() {
-        console.log("Plugin Inventory: Démarrage du plugin v2.0.1 (Serveur).");
+        console.log("Plugin Inventory: Démarrage du plugin v2.0.2 (Serveur).");
     };
 
-    // Nouvelle fonction pour créer la page d'administration du plugin.
-    // Elle est appelée par le serveur quand vous accédez à la page du plugin.
     obj.admin_page = function(req, res, user) {
-        // On construit le HTML de la page d'administration.
+        // Le contenu de cette fonction ne change pas.
         let html = `
             <div class="plugin-admin-container">
                 <h5>Inventaire applicatif Windows par groupe</h5>
@@ -44,24 +42,17 @@ module.exports.inventory = function (parent) {
             </div>
 
             <script>
-                // Ce script s'exécute dans le navigateur du client.
-                
-                // On demande la liste des groupes au serveur.
                 obj.server.send({ action: 'meshes', responseid: 'plugin_inventory_meshes' });
-
                 obj.server.once('meshes_plugin_inventory_meshes', function(meshes) {
                     const select = document.getElementById('inventoryGroupSelect');
                     const runButton = document.getElementById('inventoryRunButton');
                     if (!select || !runButton) return;
-
-                    select.innerHTML = ''; // On vide la liste
+                    select.innerHTML = '';
                     let groupCount = 0;
-                    meshes.filter(m => m.type === 2) // On ne garde que les groupes
-                          .forEach(m => {
-                              select.options.add(new Option(m.name, m._id));
-                              groupCount++;
-                          });
-                    
+                    meshes.filter(m => m.type === 2).forEach(m => {
+                        select.options.add(new Option(m.name, m._id));
+                        groupCount++;
+                    });
                     if (groupCount > 0) {
                         select.disabled = false;
                         runButton.disabled = false;
@@ -71,18 +62,16 @@ module.exports.inventory = function (parent) {
                 });
             </script>
             <style>
-                .plugin-admin-container {
-                    max-width: 800px;
-                    margin: 20px;
-                    padding: 20px;
-                    background: #fff;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                }
+                .plugin-admin-container { max-width: 800px; margin: 20px; padding: 20px; background: #fff; border: 1px solid #ddd; border-radius: 8px; }
             </style>
         `;
-        res.end(html); // On envoie la page HTML au navigateur.
+        res.end(html);
     };
+
+    // --- LE CORRECTIF EST ICI ---
+    // On déclare que pour voir la page, l'utilisateur doit avoir le droit de modifier les paramètres du serveur.
+    obj.admin_page.rights = { "server-settings": true };
+
 
     obj.hook_processAgentData = function(nodeid, data) {
         if (data == null || typeof data !== 'object' || data.plugin !== 'inventory' || data.action !== 'inventoryResults') {
@@ -96,51 +85,31 @@ module.exports.inventory = function (parent) {
         const path = require('path');
         const node = obj.meshServer.nodes[nodeid];
         if (!node) return;
-
         const meshid = node.meshid;
         const pluginDir = path.join(obj.meshServer.datapath, 'plugin-inventory');
         if (!fs.existsSync(pluginDir)) { fs.mkdirSync(pluginDir); }
-
         const cleanMeshId = meshid.replace(/[^a-zA-Z0-9]/g, '_');
         const filePath = path.join(pluginDir, `${cleanMeshId}.json`);
-        
         let inventoryData = {};
         if (fs.existsSync(filePath)) {
-            try {
-                inventoryData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            } catch (e) {
-                console.error(`Plugin Inventory: Erreur de lecture du fichier JSON existant ${filePath}`, e);
-            }
+            try { inventoryData = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { console.error(`Plugin Inventory: Erreur de lecture du fichier JSON existant ${filePath}`, e); }
         }
-        
-        inventoryData[node.name] = {
-            nodeid: node._id,
-            timestamp: new Date().toISOString(),
-            apps: results
-        };
-        
+        inventoryData[node.name] = { nodeid: node._id, timestamp: new Date().toISOString(), apps: results };
         try {
             fs.writeFileSync(filePath, JSON.stringify(inventoryData, null, 2));
             console.log(`Plugin Inventory: Inventaire pour ${node.name} (${node._id}) sauvegardé.`);
-        } catch (e) {
-            console.error(`Plugin Inventory: Erreur d'écriture dans le fichier ${filePath}`, e);
-        }
+        } catch (e) { console.error(`Plugin Inventory: Erreur d'écriture dans le fichier ${filePath}`, e); }
     }
 
-    // --- PARTIE CLIENT (exportée pour être appelée depuis le HTML) ---
-
+    // --- PARTIE CLIENT ---
     obj.runInventoryForSelectedGroup = function() {
         const select = document.getElementById('inventoryGroupSelect');
         const statusDiv = document.getElementById('inventory_results');
         if (!select || !statusDiv) return;
-
         const meshid = select.value;
         if (!meshid) return;
-
         statusDiv.innerHTML = "Récupération de la liste des agents...";
-        
         obj.server.send({ action: 'nodes', meshid: meshid, responseid: 'plugin_inventory_nodes' });
-
         obj.server.once('nodes_plugin_inventory_nodes', function(nodes) {
             let onlineWindowsNodes = 0;
             for (const i in nodes) {
@@ -150,7 +119,7 @@ module.exports.inventory = function (parent) {
                     onlineWindowsNodes++;
                 }
             }
-            statusDiv.innerHTML = `Demande d'inventaire envoyée à ${onlineWindowsNodes} machine(s) Windows. Les résultats seront stockés sur le serveur.`;
+            statusDiv.innerHTML = `Demande d'inventaire envoyée à ${onlineWindowsNodes} machine(s) Windows.`;
         });
     };
     
