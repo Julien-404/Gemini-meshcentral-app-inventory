@@ -3,7 +3,7 @@
  * @author Votre Nom
  * @copyright 2025
  * @license Apache-2.0
- * @version 1.0.0
+ * @version 1.0.1
  */
 
 "use strict";
@@ -13,14 +13,17 @@ module.exports.inventory = function (parent) {
     obj.parent = parent;
     obj.meshServer = parent.parent;
     obj.exports = [
-        'runInventory',
-        'saveInventory'
+        'runInventory'
+        // 'saveInventory' n'a pas besoin d'être exporté car il est appelé en interne.
     ];
     
+    // --- CORRECTIF ---
     // Hook pour ajouter un onglet à la page d'un groupe d'appareils
+    // La logique est simplifiée pour être plus fiable.
     obj.registerPluginTab = function (args) {
-        // On s'assure que l'onglet n'est ajouté que pour les groupes d'appareils
-        if (args.meshid == null || !args.meshid.startsWith('mesh//')) { return; }
+        // On vérifie si nous sommes sur la page d'un groupe d'appareils.
+        // L'objet 'group' est présent dans ce cas.
+        if (args.group == null) { return; }
         
         // Retourne l'objet de configuration de l'onglet
         return {
@@ -44,6 +47,7 @@ module.exports.inventory = function (parent) {
                 <button class="btn btn-primary" onclick="plugin.inventory.runInventory('${mesh._id}');">Lancer l'inventaire</button>
                 <hr/>
                 <div id="inventory_results"></div>
+                <div id="inventory_file_path" class="mt-3" style="font-style: italic; color: grey;"></div>
             </div>
         `;
     };
@@ -78,25 +82,27 @@ module.exports.inventory = function (parent) {
                     onlineWindowsNodes++;
                 }
             }
-            statusDiv.innerHTML = `Inventaire en cours sur ${onlineWindowsNodes} machine(s) Windows. Les résultats seront stockés sur le serveur.`;
+            statusDiv.innerHTML = `Inventaire en cours sur ${onlineWindowsNodes} machine(s) Windows.`;
+            var pathDiv = document.getElementById('inventory_file_path');
+            pathDiv.innerText = `Les résultats seront stockés dans le dossier 'plugin-inventory' du serveur.`;
         });
     };
 
     // Hook appelé quand l'agent envoie des données
     obj.hook_processAgentData = function(nodeid, data) {
         // On s'assure que la donnée nous est destinée
-        if (!data.plugin || data.plugin !== 'inventory') return;
+        if (data == null || typeof data != 'object' || data.plugin !== 'inventory') return;
         
         switch (data.action) {
             case 'inventoryResults':
-                obj.saveInventory(nodeid, data.results);
+                saveInventory(nodeid, data.results);
                 break;
         }
         return;
     };
     
-    // Fonction pour sauvegarder les résultats
-    obj.saveInventory = function(nodeid, results) {
+    // Fonction pour sauvegarder les résultats (plus besoin de l'exporter)
+    function saveInventory(nodeid, results) {
         const fs = require('fs');
         const path = require('path');
         
@@ -110,7 +116,9 @@ module.exports.inventory = function (parent) {
         if (!fs.existsSync(pluginDir)) { fs.mkdirSync(pluginDir); }
         
         // On crée un fichier JSON avec les résultats
-        const filePath = path.join(pluginDir, `${meshid.replace('mesh//', '')}.json`);
+        // On nettoie le meshid pour le nom de fichier
+        const cleanMeshId = meshid.replace(/[^a-zA-Z0-9]/g, '_');
+        const filePath = path.join(pluginDir, `${cleanMeshId}.json`);
         
         var inventoryData = {};
         // On lit le fichier existant pour le mettre à jour
@@ -122,13 +130,14 @@ module.exports.inventory = function (parent) {
         
         // On met à jour l'inventaire pour le noeud spécifique
         inventoryData[node.name] = {
-            timestamp: new Date().toLocaleString(),
+            nodeid: node._id,
+            timestamp: new Date().toISOString(),
             apps: results
         };
         
         // On sauvegarde le fichier
         fs.writeFileSync(filePath, JSON.stringify(inventoryData, null, 2));
-        console.log(`Inventaire pour ${node.name} sauvegardé.`);
+        console.log(`Plugin Inventory: Inventaire pour ${node.name} (${node._id}) sauvegardé.`);
     };
     
     return obj;
